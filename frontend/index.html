@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR Ruler</title>
+  <style>
+    body {
+      margin:0; overflow:hidden; background:#000; height:100vh;
+      font-family: system-ui, sans-serif;
+      color: white;
+    }
+    
+    .custom-ar-button {
+      position: fixed !important;
+      bottom: 60px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      padding: 20px 80px !important;
+      font-size: 24px !important;
+      font-weight: bold !important;
+      background: #0066ff !important;
+      color: white !important;
+      border: none !important;
+      border-radius: 20px !important;
+      box-shadow: 0 12px 35px rgba(0,102,255,0.4) !important;
+      z-index: 9999 !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+ 
+
+  <script type="module">
+    import { supportsWebXR } from "./js/main.js";
+
+    const msg = document.getElementById("msg");
+
+    if (await supportsWebXR()) {
+      // app.js will create the blue button automatically
+      import("./js/app.js");
+    } else {
+      msg.innerHTML = "AR Not Supported<br>on this device";
+      document.getElementById("instruction").style.display = "none";
+    }
+  </script>
+
+</body>
+</html>
