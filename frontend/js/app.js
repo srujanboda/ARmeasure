@@ -1,6 +1,6 @@
-// js/app.js — FIXED: No extra dots on button clicks + Total always shown when measuring
+// js/app.js — FINAL: Floor Mode + Wall Mode Fixed + Undo Bottom-Right
 
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0 coûte.159/build/three.module.js';
 import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/webxr/ARButton.js';
 
 let camera, scene, renderer, reticle, controller;
@@ -8,7 +8,7 @@ let hitTestSource = null;
 let points = [], pointMeshes = [], line = null, labels = [];
 let infoDiv, resetBtn, undoBtn, unitBtn;
 let isWallMode = false;
-let currentUnit = 'm'; // 'm', 'ft', 'in'
+let currentUnit = 'm';
 let video, canvas, ctx;
 
 init();
@@ -16,14 +16,13 @@ init();
 async function init() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
 
-  // Top info
+  // Top info bar
   infoDiv = document.createElement('div');
   infoDiv.style.cssText = `
     position:fixed; top:16px; left:50%; transform:translateX(-50%);
@@ -33,23 +32,23 @@ async function init() {
   infoDiv.innerHTML = `Total: <span style="color:#ff4444">0.00 m</span> • 0 pts`;
   document.body.appendChild(infoDiv);
 
-  // UNDO BUTTON (top-left)
+  // UNDO BUTTON — BOTTOM-RIGHT
   undoBtn = document.createElement('button');
   undoBtn.innerHTML = '↺';
   undoBtn.style.cssText = `
-    position:fixed; top:20px; left:20px; z-index:999;
+    position:fixed; bottom:100px; right:20px; z-index:999;
     width:56px; height:56px; border-radius:50%;
     background:#333; color:white; border:none;
     font-size:28px; box-shadow:0 6px 20px rgba(0,0,0,0.6);
     display:none;
   `;
   undoBtn.onclick = (e) => {
-    e.stopPropagation(); // Prevent triggering tap
+    e.stopPropagation();
     undoLastPoint();
   };
   document.body.appendChild(undoBtn);
 
-  // UNIT TOGGLE – TOP-LEFT, BELOW UNDO
+  // UNIT TOGGLE — TOP-LEFT, BELOW UNDO
   unitBtn = document.createElement('button');
   unitBtn.textContent = 'm';
   unitBtn.style.cssText = `
@@ -60,7 +59,7 @@ async function init() {
     display:flex; align-items:center; justify-content:center;
   `;
   unitBtn.onclick = (e) => {
-    e.stopPropagation(); // Prevent triggering tap
+    e.stopPropagation();
     if (currentUnit === 'm') { currentUnit = 'ft'; unitBtn.textContent = 'ft'; }
     else if (currentUnit === 'ft') { currentUnit = 'in'; unitBtn.textContent = 'in'; }
     else { currentUnit = 'm'; unitBtn.textContent = 'm'; }
@@ -77,12 +76,12 @@ async function init() {
     border:none; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:none;
   `;
   resetBtn.onclick = (e) => {
-    e.stopPropagation(); // Prevent triggering tap
+    e.stopPropagation();
     resetAll();
   };
   document.body.appendChild(resetBtn);
 
-  // START AR + rest unchanged...
+  // START AR Button
   const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ['hit-test'],
     optionalFeatures: ['dom-overlay'],
@@ -99,7 +98,7 @@ async function init() {
     }, 800);
   });
 
-  // Video + Canvas setup (same)
+  // Video + Canvas for wall detection
   video = document.createElement('video');
   video.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;z-index:-1;';
   video.autoplay = video.playsInline = video.muted = true;
@@ -129,6 +128,7 @@ async function init() {
   controller = renderer.xr.getController(0);
   controller.addEventListener('select', onSelect);
   scene.add(controller);
+
   renderer.domElement.addEventListener('click', onScreenTap);
   renderer.setAnimationLoop(render);
 }
@@ -139,7 +139,9 @@ function formatDistance(meters) {
   return meters.toFixed(2) + ' m';
 }
 
-function onSelect() { if (reticle.visible && !isWallMode) placePointFromReticle(); }
+function onSelect() { 
+  if (reticle.visible && !isWallMode) placePointFromReticle(); 
+}
 
 function onScreenTap(e) {
   if (isWallMode && points.length < 20) {
@@ -151,7 +153,7 @@ function onScreenTap(e) {
     const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016), new THREE.MeshBasicMaterial({color:0x00ffaa}));
     dot.position.copy(pos); scene.add(dot);
     pointMeshes.push(dot); points.push(pos.clone());
-    updateAll();
+    updateUpdateAll();
   }
 }
 
@@ -173,13 +175,12 @@ function undoLastPoint() {
 function updateAll() {
   if (line) scene.remove(line);
   labels.forEach(l => scene.remove(l)); labels = [];
-
   undoBtn.style.display = resetBtn.style.display = points.length > 0 ? 'block' : 'none';
 
   if (points.length < 2) {
-    infoDiv.innerHTML = isWallMode 
+    infoDiv.innerHTML = isWallMode
       ? `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`
-      : `Total: <span style="color:#ff4444">0.00 ${currentUnit}</span> • 0 pts`;
+      : `<span style="color:#00ff88">FLOOR MODE</span> – Tap to place`;
     return;
   }
 
@@ -211,7 +212,7 @@ function resetAll() {
   points = []; if (line) scene.remove(line);
   labels.forEach(l => scene.remove(l)); labels = []; line = null;
   undoBtn.style.display = resetBtn.style.display = 'none';
-  infoDiv.innerHTML = isWallMode ? `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere` : `Total: 0.00 ${currentUnit}`;
+  infoDiv.innerHTML = isWallMode ? `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere` : `<span style="color:#00ff88">FLOOR MODE</span> – Tap to place`;
 }
 
 function startWallDetection() {
@@ -248,11 +249,22 @@ function render(t, frame) {
   if (hitTestSource && frame) {
     const hits = frame.getHitTestResults(hitTestSource);
     if (hits.length > 0) {
-      isWallMode = false; canvas.style.opacity = '0'; reticle.visible = true;
+      // FLOOR MODE
+      isWallMode = false;
+      canvas.style.opacity = '0';
+      reticle.visible = true;
       reticle.matrix.fromArray(hits[0].getPose(renderer.xr.getReferenceSpace()).transform.matrix);
+      if (points.length < 2) {
+        infoDiv.innerHTML = `<span style="color:#00ff88">FLOOR MODE</span> – Tap to place`;
+      }
     } else {
-      isWallMode = true; canvas.style.opacity = '0.6'; reticle.visible = false;
-      infoDiv.innerHTML = points.length >= 2 ? infoDiv.innerHTML : `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`; // FIXED: Show total if measuring
+      // WALL MODE
+      isWallMode = true;
+      canvas.style.opacity = '0.6';
+      reticle.visible = false;
+      if (points.length < 2) {
+        infoDiv.innerHTML = `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`;
+      }
     }
   }
   renderer.render(scene, camera);
