@@ -73,9 +73,9 @@ async function init() {
   resetBtn = document.createElement('button');
   resetBtn.textContent = "Reset";
   resetBtn.style.cssText = `
-    position:fixed; top:20px; right:20px; z-index:999;
+    position:fixed; top:20px; right:90px; z-index:999;
     padding:12px 24px; font:bold 16px system-ui; background:#ff3333; color:white;
-    border:none; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:none;
+    border:none; border-radius:30px; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:none;
   `;
   resetBtn.onclick = (e) => {
     e.stopPropagation(); // Prevent triggering tap
@@ -85,12 +85,13 @@ async function init() {
 
   // NEW LINE BUTTON
   newLineBtn = document.createElement('button');
-  newLineBtn.textContent = "New Line";
+  newLineBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
   newLineBtn.style.cssText = `
-    position:fixed; top:20px; right:110px; z-index:999;
-    padding:12px 24px; font:bold 16px system-ui; background:#444; color:white;
-    border:none; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.5);
-    display:none;
+    position:fixed; top:20px; left:20px; z-index:999;
+    width:56px; height:56px; border-radius:50%;
+    background:#444; color:white; border:1px solid #666;
+    box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    display:none; align-items:center; justify-content:center;
   `;
   newLineBtn.onclick = (e) => {
     e.stopPropagation();
