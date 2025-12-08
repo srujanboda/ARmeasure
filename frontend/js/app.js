@@ -145,7 +145,7 @@ function updateAll() {
     labels.push(sprite);
   }
 
-  infoDiv.innerHTML = `Total: <span style="color:#ff4444;font-size:23px">${total.toFixed(2)} m</span> • ${points.length} pts`;
+  infoDiv.innerHTML = `Total: <span style="color:#ff4444;font-size:23px">${total.toFixed(2)} m</span> • ${points.length} pts • Hits: ${frame?._lastHitCount || 0}`;
 }
 
 function resetAll() {
@@ -155,7 +155,7 @@ function resetAll() {
   if (line) scene.remove(line);
   labels.forEach(l => scene.remove(l));
   labels = []; line = null;
-  infoDiv.textContent = "Cleared — ready to measure again";
+  infoDiv.textContent = "Scan walls slowly • Tap to measure";
   resetBtn.style.display = "none";
 }
 
@@ -165,13 +165,20 @@ function render(t, frame) {
   if (session && !hitTestSource) {
     session.requestReferenceSpace('viewer').then(refSpace => {
       session.requestHitTestSource({
-        space: refSpace,
-        entityTypes: ['plane', 'point'] // Detects floors, walls, and feature points
+        space: refSpace
+        // Removed entityTypes: ['plane', 'point'] to rely on default behavior
+        // while keeping plane-detection feature enabled in ARButton
       }).then(source => hitTestSource = source);
     });
   }
   if (hitTestSource && frame) {
     const hits = frame.getHitTestResults(hitTestSource);
+    frame._lastHitCount = hits.length; // Store for debug display
+    // Update debug text if no points placed yet
+    if (points.length === 0) {
+      infoDiv.textContent = hits.length > 0 ? "Surface Found! Tap to place" : "Move phone to scan walls... (Hits: 0)";
+    }
+
     reticle.visible = hits.length > 0;
     if (hits.length > 0) {
       const pose = hits[0].getPose(renderer.xr.getReferenceSpace());
