@@ -57,7 +57,7 @@ function init() {
   // Create START AR button
   const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay'],
+    optionalFeatures: ['dom-overlay', 'plane-detection'],
     domOverlay: { root: document.body }
   });
   arButton.classList.add('custom-ar-button');
@@ -69,7 +69,7 @@ function init() {
       document.querySelectorAll('button').forEach(btn => {
         const text = btn.textContent.toUpperCase();
         if (btn !== resetBtn && btn !== stopBtn && btn !== arButton &&
-            (text.includes('STOP') || text.includes('EXIT') || text.includes('END'))) {
+          (text.includes('STOP') || text.includes('EXIT') || text.includes('END'))) {
           btn.remove();
         }
       });
@@ -79,7 +79,7 @@ function init() {
   scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
 
   reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.08, 0.10, 32).rotateX(-Math.PI/2),
+    new THREE.RingGeometry(0.08, 0.10, 32).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0x00ff88 })
   );
   reticle.matrixAutoUpdate = false;
@@ -97,7 +97,7 @@ function init() {
 function onSelect() {
   if (!reticle.visible) return;
   const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016), new THREE.MeshBasicMaterial({color:0x00ffaa}));
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016), new THREE.MeshBasicMaterial({ color: 0x00ffaa }));
   dot.position.copy(p);
   scene.add(dot);
   pointMeshes.push(dot);
@@ -118,27 +118,27 @@ function updateAll() {
 
   resetBtn.style.display = "block";
 
-  line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({color:0xff0044, linewidth:6}));
+  line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0xff0044, linewidth: 6 }));
   scene.add(line);
 
   let total = 0;
   for (let i = 1; i < points.length; i++) {
-    const d = points[i-1].distanceTo(points[i]);
+    const d = points[i - 1].distanceTo(points[i]);
     total += d;
 
-    const mid = new THREE.Vector3().lerpVectors(points[i-1], points[i], 0.5);
+    const mid = new THREE.Vector3().lerpVectors(points[i - 1], points[i], 0.5);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 160; canvas.height = 60;
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
-    ctx.fillRect(0,0,160,60);
+    ctx.fillRect(0, 0, 160, 60);
     ctx.fillStyle = 'white';
     ctx.font = 'bold 38px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(d.toFixed(2)+' m', 80, 30);
+    ctx.fillText(d.toFixed(2) + ' m', 80, 30);
 
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas), depthTest:false}));
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
     sprite.position.copy(mid);
     sprite.scale.set(0.20, 0.08, 1);
     scene.add(sprite);
@@ -164,7 +164,10 @@ function render(t, frame) {
   const session = renderer.xr.getSession();
   if (session && !hitTestSource) {
     session.requestReferenceSpace('viewer').then(refSpace => {
-      session.requestHitTestSource({space: refSpace}).then(source => hitTestSource = source);
+      session.requestHitTestSource({
+        space: refSpace,
+        entityTypes: ['plane', 'point'] // Detects floors, walls, and feature points
+      }).then(source => hitTestSource = source);
     });
   }
   if (hitTestSource && frame) {
