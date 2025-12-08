@@ -163,27 +163,49 @@ function render(t, frame) {
   if (!frame) return;
   const session = renderer.xr.getSession();
   if (session && !hitTestSource) initHitTest(session);
+
+  if (hitTestSource && frame) {
+    const hits = frame.getHitTestResults(hitTestSource);
+    frame._lastHitCount = hits.length; // Store for debug display
+
+    // Debug info update
+    if (points.length === 0) {
+      const mode = window._hitTestMode === 'plane' ? 'Plane Only' : 'Plane+Point';
+      const status = hits.length > 0 ? "Surface Found!" : "Scanning...";
+      infoDiv.innerHTML = `${status} <br><span style="font-size:10px;opacity:0.8">Mode: ${mode} • Hits: ${hits.length}</span>`;
+    }
+
+    reticle.visible = hits.length > 0;
+    if (hits.length > 0) {
+      const pose = hits[0].getPose(renderer.xr.getReferenceSpace());
+      reticle.matrix.fromArray(pose.transform.matrix);
+    }
+  }
+  renderer.render(scene, camera);
+}
+
+// Helper to request hit test with fallback
+function initHitTest(session) {
+  if (hitTestSource) return;
+
   session.requestReferenceSpace('viewer').then(refSpace => {
+    // 1. Try hitting Planes AND Points (Best for walls/corners)
     session.requestHitTestSource({
-      space: refSpace
-      // Removed entityTypes: ['plane', 'point'] to rely on default behavior
-      // while keeping plane-detection feature enabled in ARButton
-    }).then(source => hitTestSource = source);
+      space: refSpace,
+      entityTypes: ['plane', 'point']
+    })
+      .then(source => {
+        hitTestSource = source;
+        window._hitTestMode = 'plane+point';
+      })
+      .catch(() => {
+        // 2. Fallback to default (likely Plane only) if point fails
+        console.warn("Point hit test failed, falling back to plane only");
+        session.requestHitTestSource({ space: refSpace })
+          .then(source => {
+            hitTestSource = source;
+            window._hitTestMode = 'plane';
+          });
+      });
   });
 }
-if (hitTestSource && frame) {
-  const hits = frame.getHitTestResults(hitTestSource);
-  frame._lastHitCount = hits.length; // Store for debug display
-  // Update debug text if no points placed yet
-  if (points.length === 0) {
-    infoDiv.textContent = hits.length > 0 ? "Surface Found! Tap to place" : "Move phone to scan walls... (Hits: 0)";
-  }
-
-  reticle.visible = hits.length > 0;
-  if (hits.length > 0) {
-    const pose = hits[0].getPose(renderer.xr.getReferenceSpace());
-    reticle.matrix.fromArray(pose.transform.matrix);
-  }
-}
-renderer.render(scene, camera);
-
