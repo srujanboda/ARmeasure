@@ -1,14 +1,15 @@
-// js/app.js — FINAL: Floor Mode + Wall Mode Fixed + Undo Bottom-Right
+// js/app.js — FIXED: No extra dots on button clicks + Total always shown when measuring
 
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0 coûte.159/build/three.module.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js';
 import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/webxr/ARButton.js';
 
 let camera, scene, renderer, reticle, controller;
 let hitTestSource = null;
 let points = [], pointMeshes = [], line = null, labels = [];
-let infoDiv, resetBtn, undoBtn, unitBtn;
+let allChains = [];
+let infoDiv, resetBtn, undoBtn, unitBtn, newLineBtn;
 let isWallMode = false;
-let currentUnit = 'm';
+let currentUnit = 'm'; // 'm', 'ft', 'in'
 let video, canvas, ctx;
 
 init();
@@ -16,13 +17,14 @@ init();
 async function init() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
 
-  // Top info bar
+  // Top info
   infoDiv = document.createElement('div');
   infoDiv.style.cssText = `
     position:fixed; top:16px; left:50%; transform:translateX(-50%);
@@ -32,23 +34,23 @@ async function init() {
   infoDiv.innerHTML = `Total: <span style="color:#ff4444">0.00 m</span> • 0 pts`;
   document.body.appendChild(infoDiv);
 
-  // UNDO BUTTON — BOTTOM-RIGHT
+  // UNDO BUTTON (top-left)
   undoBtn = document.createElement('button');
-  undoBtn.innerHTML = '↺';
+  undoBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>';
   undoBtn.style.cssText = `
-    position:fixed; bottom:100px; right:20px; z-index:999;
-    width:56px; height:56px; border-radius:50%;
-    background:#333; color:white; border:none;
-    font-size:28px; box-shadow:0 6px 20px rgba(0,0,0,0.6);
-    display:none;
+    position:fixed; bottom:40px; right:30px; z-index:999;
+    width:60px; height:60px; border-radius:30px;
+    background:#222; color:white; border:1px solid #444;
+    display:none; align-items:center; justify-content:center;
+    box-shadow:0 4px 12px rgba(0,0,0,0.5);
   `;
   undoBtn.onclick = (e) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent triggering tap
     undoLastPoint();
   };
   document.body.appendChild(undoBtn);
 
-  // UNIT TOGGLE — TOP-LEFT, BELOW UNDO
+  // UNIT TOGGLE – TOP-LEFT, BELOW UNDO
   unitBtn = document.createElement('button');
   unitBtn.textContent = 'm';
   unitBtn.style.cssText = `
@@ -59,7 +61,7 @@ async function init() {
     display:flex; align-items:center; justify-content:center;
   `;
   unitBtn.onclick = (e) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent triggering tap
     if (currentUnit === 'm') { currentUnit = 'ft'; unitBtn.textContent = 'ft'; }
     else if (currentUnit === 'ft') { currentUnit = 'in'; unitBtn.textContent = 'in'; }
     else { currentUnit = 'm'; unitBtn.textContent = 'm'; }
@@ -76,12 +78,27 @@ async function init() {
     border:none; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:none;
   `;
   resetBtn.onclick = (e) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent triggering tap
     resetAll();
   };
   document.body.appendChild(resetBtn);
 
-  // START AR Button
+  // NEW LINE BUTTON
+  newLineBtn = document.createElement('button');
+  newLineBtn.textContent = "New Line";
+  newLineBtn.style.cssText = `
+    position:fixed; top:20px; right:110px; z-index:999;
+    padding:12px 24px; font:bold 16px system-ui; background:#444; color:white;
+    border:none; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    display:none;
+  `;
+  newLineBtn.onclick = (e) => {
+    e.stopPropagation();
+    startNewLine();
+  };
+  document.body.appendChild(newLineBtn);
+
+  // START AR + rest unchanged...
   const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ['hit-test'],
     optionalFeatures: ['dom-overlay'],
@@ -98,7 +115,7 @@ async function init() {
     }, 800);
   });
 
-  // Video + Canvas for wall detection
+  // Video + Canvas setup (same)
   video = document.createElement('video');
   video.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;z-index:-1;';
   video.autoplay = video.playsInline = video.muted = true;
@@ -110,7 +127,7 @@ async function init() {
   ctx = canvas.getContext('2d');
 
   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then(s => { video.srcObject = s; video.play(); }).catch(() => {});
+    .then(s => { video.srcObject = s; video.play(); }).catch(() => { });
 
   if (typeof cv !== 'undefined') onOpenCVReady();
   window.onOpenCVReady = () => { if (video.videoWidth) startWallDetection(); };
@@ -118,7 +135,7 @@ async function init() {
   scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
 
   reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.08, 0.10, 32).rotateX(-Math.PI/2),
+    new THREE.RingGeometry(0.08, 0.10, 32).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0x00ff88 })
   );
   reticle.matrixAutoUpdate = false;
@@ -128,7 +145,6 @@ async function init() {
   controller = renderer.xr.getController(0);
   controller.addEventListener('select', onSelect);
   scene.add(controller);
-
   renderer.domElement.addEventListener('click', onScreenTap);
   renderer.setAnimationLoop(render);
 }
@@ -139,9 +155,7 @@ function formatDistance(meters) {
   return meters.toFixed(2) + ' m';
 }
 
-function onSelect() { 
-  if (reticle.visible && !isWallMode) placePointFromReticle(); 
-}
+function onSelect() { if (reticle.visible && !isWallMode) placePointFromReticle(); }
 
 function onScreenTap(e) {
   if (isWallMode && points.length < 20) {
@@ -150,16 +164,16 @@ function onScreenTap(e) {
     const vec = new THREE.Vector3(x, y, 0.5).unproject(camera);
     const dir = vec.sub(camera.position).normalize();
     const pos = camera.position.clone().add(dir.multiplyScalar(2.5));
-    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016), new THREE.MeshBasicMaterial({color:0x00ffaa}));
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016), new THREE.MeshBasicMaterial({ color: 0x00ffaa }));
     dot.position.copy(pos); scene.add(dot);
     pointMeshes.push(dot); points.push(pos.clone());
-    updateUpdateAll();
+    updateAll();
   }
 }
 
 function placePointFromReticle() {
   const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016), new THREE.MeshBasicMaterial({color:0x00ffaa}));
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016), new THREE.MeshBasicMaterial({ color: 0x00ffaa }));
   dot.position.copy(p); scene.add(dot);
   pointMeshes.push(dot); points.push(p.clone());
   updateAll();
@@ -175,31 +189,34 @@ function undoLastPoint() {
 function updateAll() {
   if (line) scene.remove(line);
   labels.forEach(l => scene.remove(l)); labels = [];
-  undoBtn.style.display = resetBtn.style.display = points.length > 0 ? 'block' : 'none';
+
+  const hasContent = points.length > 0 || allChains.length > 0;
+  undoBtn.style.display = resetBtn.style.display = hasContent ? 'block' : 'none';
+  newLineBtn.style.display = (points.length >= 2) ? 'block' : 'none';
 
   if (points.length < 2) {
     infoDiv.innerHTML = isWallMode
       ? `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`
-      : `<span style="color:#00ff88">FLOOR MODE</span> – Tap to place`;
+      : `Total: <span style="color:#ff4444">0.00 ${currentUnit}</span> • 0 pts`;
     return;
   }
 
-  line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({color:0xff0044, linewidth:6}));
+  line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0xff0044, linewidth: 6 }));
   scene.add(line);
 
   let totalMeters = 0;
   for (let i = 1; i < points.length; i++) {
-    const d = points[i-1].distanceTo(points[i]);
+    const d = points[i - 1].distanceTo(points[i]);
     totalMeters += d;
-    const mid = new THREE.Vector3().lerpVectors(points[i-1], points[i], 0.5);
+    const mid = new THREE.Vector3().lerpVectors(points[i - 1], points[i], 0.5);
     const cnv = document.createElement('canvas');
     const c = cnv.getContext('2d');
     cnv.width = 200; cnv.height = 70;
-    c.fillStyle = 'rgba(0,0,0,0.9)'; c.fillRect(0,0,200,70);
+    c.fillStyle = 'rgba(0,0,0,0.9)'; c.fillRect(0, 0, 200, 70);
     c.fillStyle = '#fff'; c.font = 'bold 42px system-ui';
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(formatDistance(d), 100, 35);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cnv), depthTest:false}));
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cnv), depthTest: false }));
     sprite.position.copy(mid); sprite.scale.set(0.25, 0.1, 1);
     scene.add(sprite); labels.push(sprite);
   }
@@ -208,11 +225,30 @@ function updateAll() {
 }
 
 function resetAll() {
+  allChains.forEach(c => {
+    c.meshes.forEach(m => scene.remove(m));
+    if (c.line) scene.remove(c.line);
+    c.labels.forEach(l => scene.remove(l));
+  });
+  allChains = [];
+
   points.forEach(() => scene.remove(pointMeshes.shift()));
   points = []; if (line) scene.remove(line);
   labels.forEach(l => scene.remove(l)); labels = []; line = null;
-  undoBtn.style.display = resetBtn.style.display = 'none';
-  infoDiv.innerHTML = isWallMode ? `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere` : `<span style="color:#00ff88">FLOOR MODE</span> – Tap to place`;
+  undoBtn.style.display = resetBtn.style.display = newLineBtn.style.display = 'none';
+  infoDiv.innerHTML = isWallMode ? `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere` : `Total: 0.00 ${currentUnit}`;
+}
+
+function startNewLine() {
+  if (points.length < 2) return;
+  allChains.push({
+    points: [...points],
+    meshes: [...pointMeshes],
+    line: line,
+    labels: [...labels]
+  });
+  points = []; pointMeshes = []; line = null; labels = [];
+  updateAll();
 }
 
 function startWallDetection() {
@@ -225,10 +261,10 @@ function startWallDetection() {
     cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
     const corners = new cv.KeyPointVector();
     cv.FAST(gray, corners, 30, true);
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < corners.size(); i++) {
       const pt = corners.get(i).pt;
-      ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, Math.PI*2);
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
       ctx.fillStyle = '#00ffff'; ctx.fill();
     }
     frame.delete(); gray.delete(); corners.delete();
@@ -243,27 +279,24 @@ function render(t, frame) {
   const session = renderer.xr.getSession();
   if (session && !hitTestSource) {
     session.requestReferenceSpace('viewer').then(rs => {
-      session.requestHitTestSource({space: rs}).then(s => hitTestSource = s);
+      session.requestHitTestSource({ space: rs }).then(s => hitTestSource = s);
     });
   }
   if (hitTestSource && frame) {
     const hits = frame.getHitTestResults(hitTestSource);
     if (hits.length > 0) {
-      // FLOOR MODE
-      isWallMode = false;
-      canvas.style.opacity = '0';
-      reticle.visible = true;
+      isWallMode = false; canvas.style.opacity = '0'; reticle.visible = true;
       reticle.matrix.fromArray(hits[0].getPose(renderer.xr.getReferenceSpace()).transform.matrix);
-      if (points.length < 2) {
-        infoDiv.innerHTML = `<span style="color:#00ff88">FLOOR MODE</span> – Tap to place`;
-      }
     } else {
-      // WALL MODE
-      isWallMode = true;
-      canvas.style.opacity = '0.6';
-      reticle.visible = false;
+      isWallMode = true; canvas.style.opacity = '0.6'; reticle.visible = false;
       if (points.length < 2) {
-        infoDiv.innerHTML = `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`;
+        const viewDir = new THREE.Vector3();
+        camera.getWorldDirection(viewDir);
+        if (viewDir.y < -0.5) {
+          infoDiv.innerHTML = `<span style="color:#00ff88">TAP MODE</span> – Tap to place`;
+        } else {
+          infoDiv.innerHTML = `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`;
+        }
       }
     }
   }
