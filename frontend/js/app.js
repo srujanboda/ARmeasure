@@ -162,28 +162,28 @@ function resetAll() {
 function render(t, frame) {
   if (!frame) return;
   const session = renderer.xr.getSession();
-  if (session && !hitTestSource) {
-    session.requestReferenceSpace('viewer').then(refSpace => {
-      session.requestHitTestSource({
-        space: refSpace
-        // Removed entityTypes: ['plane', 'point'] to rely on default behavior
-        // while keeping plane-detection feature enabled in ARButton
-      }).then(source => hitTestSource = source);
-    });
-  }
-  if (hitTestSource && frame) {
-    const hits = frame.getHitTestResults(hitTestSource);
-    frame._lastHitCount = hits.length; // Store for debug display
-    // Update debug text if no points placed yet
-    if (points.length === 0) {
-      infoDiv.textContent = hits.length > 0 ? "Surface Found! Tap to place" : "Move phone to scan walls... (Hits: 0)";
-    }
-
-    reticle.visible = hits.length > 0;
-    if (hits.length > 0) {
-      const pose = hits[0].getPose(renderer.xr.getReferenceSpace());
-      reticle.matrix.fromArray(pose.transform.matrix);
-    }
-  }
-  renderer.render(scene, camera);
+  if (session && !hitTestSource) initHitTest(session);
+  session.requestReferenceSpace('viewer').then(refSpace => {
+    session.requestHitTestSource({
+      space: refSpace
+      // Removed entityTypes: ['plane', 'point'] to rely on default behavior
+      // while keeping plane-detection feature enabled in ARButton
+    }).then(source => hitTestSource = source);
+  });
 }
+if (hitTestSource && frame) {
+  const hits = frame.getHitTestResults(hitTestSource);
+  frame._lastHitCount = hits.length; // Store for debug display
+  // Update debug text if no points placed yet
+  if (points.length === 0) {
+    infoDiv.textContent = hits.length > 0 ? "Surface Found! Tap to place" : "Move phone to scan walls... (Hits: 0)";
+  }
+
+  reticle.visible = hits.length > 0;
+  if (hits.length > 0) {
+    const pose = hits[0].getPose(renderer.xr.getReferenceSpace());
+    reticle.matrix.fromArray(pose.transform.matrix);
+  }
+}
+renderer.render(scene, camera);
+
