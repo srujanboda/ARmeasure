@@ -73,7 +73,7 @@ async function init() {
   resetBtn = document.createElement('button');
   resetBtn.textContent = "Reset";
   resetBtn.style.cssText = `
-    position:fixed; top:20px; right:90px; z-index:999;
+    position:fixed; top:20px; right:20px; z-index:999;
     padding:12px 24px; font:bold 16px system-ui; background:#ff3333; color:white;
     border:none; border-radius:30px; box-shadow:0 6px 20px rgba(0,0,0,0.5); display:none;
   `;
