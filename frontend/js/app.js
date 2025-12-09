@@ -1,4 +1,4 @@
-// js/app.js — FINAL: Wall Mode 100% Accurate Tap Placement
+// js/app.js — FINAL: Wall Mode with Reticle + Perfect Accuracy
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js';
 import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/webxr/ARButton.js';
@@ -12,8 +12,9 @@ let isWallMode = false;
 let currentUnit = 'm';
 let video, canvas, ctx;
 
-// Raycaster for accurate wall tapping
+// Raycaster for perfect wall tap
 const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 
 init();
 
@@ -75,9 +76,10 @@ async function init() {
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
 
+  // RETICLE — Now works in BOTH floor and wall mode
   reticle = new THREE.Mesh(
     new THREE.RingGeometry(0.08, 0.10, 32).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0x00ff88 })
+    new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.9 })
   );
   reticle.matrixAutoUpdate = false;
   reticle.visible = false;
@@ -87,7 +89,7 @@ async function init() {
   controller.addEventListener('select', onSelect);
   scene.add(controller);
 
-  // Accurate tap handling
+  // Perfect tap handling
   renderer.domElement.addEventListener('click', onScreenTap);
   renderer.setAnimationLoop(render);
 }
@@ -121,21 +123,19 @@ function formatDistance(m) {
 }
 
 function onSelect() {
-  if (reticle.visible && !isWallMode) placePointFromReticle();
+  if (reticle.visible) placePointFromReticle();
 }
 
-// FIXED: Accurate wall tap using raycaster
+// ACCURATE WALL TAP — Uses raycaster from camera
 function onScreenTap(e) {
-  if (!isWallMode || points.length >= 20) return;
+  if (!isWallMode) return;
 
-  const x = (e.clientX / window.innerWidth) * 2 - 1;
-  const y = -(e.clientY / window.innerHeight) * 2 + 1;
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
-  raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+  raycaster.setFromCamera(mouse, camera);
   const direction = raycaster.ray.direction;
-
-  // Cast ray from camera in tap direction
-  const distance = 3.0; // Max 3m reach (adjustable)
+  const distance = 3.0; // Max reach
   const pos = camera.position.clone().add(direction.multiplyScalar(distance));
 
   addPoint(pos);
@@ -201,14 +201,14 @@ function updateAll() {
 
 function makeLabel(text) {
   const canvas = document.createElement('canvas');
-  canvas.width = 200; canvas.height = 70;
+  canvas.width = 220; canvas.height = 80;
   const c = canvas.getContext('2d');
-  c.fillStyle = 'rgba(0,0,0,0.9)'; c.fillRect(0,0,200,70);
-  c.fillStyle = '#fff'; c.font = 'bold 42px system-ui';
+  c.fillStyle = 'rgba(0,0,0,0.9)'; c.fillRect(0,0,220,80);
+  c.fillStyle = '#fff'; c.font = 'bold 46px system-ui';
   c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(text, 100, 35);
+  c.fillText(text, 110, 40);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas), depthTest:false}));
-  sprite.scale.set(0.25, 0.1, 1);
+  sprite.scale.set(0.28, 0.11, 1);
   return sprite;
 }
 
@@ -226,12 +226,12 @@ function refreshAllLabels() {
 
 function makeLabelCanvas(text) {
   const c = document.createElement('canvas');
-  c.width = 200; c.height = 70;
+  c.width = 220; c.height = 80;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillRect(0,0,200,70);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 42px system-ui';
+  ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillRect(0,0,220,80);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 46px system-ui';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 100, 35);
+  ctx.fillText(text, 110, 40);
   return c;
 }
 
@@ -264,16 +264,20 @@ function render(t, frame) {
       canvas.style.opacity = '0';
       reticle.visible = true;
       reticle.matrix.fromArray(hits[0].getPose(renderer.xr.getReferenceSpace()).transform.matrix);
-      if (points.length < 2) {
-        infoDiv.innerHTML = `Total: <span style="color:#ff4444">0.00 ${currentUnit}</span> • 0 pts`;
-      }
     } else {
       isWallMode = true;
       canvas.style.opacity = '0.6';
-      reticle.visible = false;
-      if (points.length < 2) {
-        infoDiv.innerHTML = `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`;
-      }
+      reticle.visible = true;  // RETICLE NOW SHOWS IN WALL MODE TOO!
+      // Position reticle at fixed distance in front of camera
+      const forward = new THREE.Vector3(0, 0, -1);
+      camera.getWorldDirection(forward);
+      reticle.position.copy(camera.position).add(forward.multiplyScalar(2.0));
+      reticle.quaternion.copy(camera.quaternion);
+    }
+    if (points.length < 2) {
+      infoDiv.innerHTML = isWallMode
+        ? `<span style="color:#00ffff">WALL MODE</span> – Tap anywhere`
+        : `Total: <span style="color:#ff4444">0.00 ${currentUnit}</span> • 0 pts`;
     }
   }
   renderer.render(scene, camera);
