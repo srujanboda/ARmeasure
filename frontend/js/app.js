@@ -1,4 +1,4 @@
-// js/app.js — FIXED: No extra dots on button clicks + Total always shown when measuring
+// js/app.js — FIXED:
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js';
 import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/webxr/ARButton.js';
@@ -7,7 +7,7 @@ let camera, scene, renderer, reticle, controller;
 let hitTestSource = null;
 let points = [], pointMeshes = [], line = null, labels = [];
 let allChains = [];
-let infoDiv, resetBtn, undoBtn, unitBtn, newLineBtn;
+let infoDiv, resetBtn, undoBtn, unitBtn, newLineBtn, stopBtn;
 let isWallMode = false;
 let currentUnit = 'm'; // 'm', 'ft', 'in'
 let video, canvas, ctx;
@@ -99,7 +99,25 @@ async function init() {
   };
   document.body.appendChild(newLineBtn);
 
-  // START AR + rest unchanged...
+  // STOP AR
+  stopBtn = document.createElement('button');
+  stopBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+  stopBtn.style.cssText = `
+    position:fixed; bottom:40px; left:30px; z-index:999;
+    width:60px; height:60px; border-radius:30px;
+    background:#ff3333; color:white; border:1px solid #ff0000;
+    display:none; align-items:center; justify-content:center;
+    box-shadow:0 4px 12px rgba(0,0,0,0.5);
+  `;
+  stopBtn.onclick = (e) => {
+    e.stopPropagation();
+    const session = renderer.xr.getSession();
+    if (session) session.end();
+    window.location.reload();
+  };
+  document.body.appendChild(stopBtn);
+
+  // START AR
   const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ['hit-test'],
     optionalFeatures: ['dom-overlay'],
@@ -109,11 +127,15 @@ async function init() {
   document.body.appendChild(arButton);
 
   arButton.addEventListener('click', () => {
-    setTimeout(() => {
-      document.querySelectorAll('button').forEach(b => {
-        if (b.textContent.toUpperCase().includes('EXIT') || b.textContent.toUpperCase().includes('STOP')) b.remove();
-      });
-    }, 800);
+   
+  });
+
+  
+  renderer.xr.addEventListener('sessionstart', () => {
+    stopBtn.style.display = 'flex';
+  });
+  renderer.xr.addEventListener('sessionend', () => {
+    stopBtn.style.display = 'none';
   });
 
   // Video + Canvas setup (same)
@@ -161,7 +183,7 @@ function onSelect() {
 }
 
 function onScreenTap(e) {
-  // UNIFIED INTERACTION: Always use the reticle for placement.
+ 
   // This avoids offset issues where "tap anywhere" projected to a different depth than the user expected.
   if (reticle.visible && points.length < 20) {
     placePointFromReticle();
@@ -283,9 +305,6 @@ function render(t, frame) {
   if (hitTestSource && frame) {
     const hits = frame.getHitTestResults(hitTestSource);
 
-    // Logic update: Always show reticle.
-    // If hits > 0, snap to surface.
-    // If hits == 0, float 2m in front of camera (Fallback/Wall Mode).
 
     if (hits.length > 0) {
       isWallMode = false;
@@ -295,7 +314,7 @@ function render(t, frame) {
     } else {
       isWallMode = true;
       canvas.style.opacity = '0.6';
-      reticle.visible = true; // FORCE VISIBLE
+      reticle.visible = true; 
 
       // Place 2 meters in front of camera
       const viewDir = new THREE.Vector3();
@@ -305,36 +324,12 @@ function render(t, frame) {
       // Update position manually since autoUpdate is false
       reticle.position.copy(targetPos);
       reticle.lookAt(camera.position);
-      // Correction: RingGeometry is flat in XY, but the specific mesh geometry was rotated X -90.
-      // So local Z is 'up' relative to ring face? No.
-      // Let's just create a rotation that faces the camera properly.
-      // If we looked at camera, local Z points to camera.
-      // We want the ring face (which was XZ plane due to rotation?) to enable user to see "through" it?
-      // Actually, if we just lookAt(camera), the disk is perpendicular to view vector.
-      // But we need to account for that initial geometry rotation if we want it to look like a ring and not a line.
-      // The geometry is `new THREE.RingGeometry(...).rotateX(-Math.PI / 2)`.
-      // This puts the ring in the XZ plane. Normal is +Y.
-      // If we lookAt(camera), the object's +Z axis points to camera.
-      // So the XZ plane (where the ring is) contains the view vector? That means we see it edge-on (invisible).
-      // To see the face, we want the normal (+Y) to point to camera? No, usually +Z is normal for RingGeometry(unchanged).
-      // Since it is rotated -90 X, Y is normal.
-
-      // So, to make the ring face the camera:
-      // We want object's local Y to point to camera (or away).
-      // `lookAt` aligns +Z with vector.
-      // If we rotX(90) (or -90), then Y might align with Z?
+    
 
       reticle.rotation.set(0, 0, 0); // reset
       reticle.lookAt(camera.position); // Z points to camera. Ring (in XZ) is edge-on.
       reticle.rotateX(Math.PI / 2); // Rotate 90 deg around local X. Now XZ plane should be perpendicular to Z?
-      // Let's visualize: 
-      // Initial: Ring in XZ. Z points North.
-      // lookAt: Z points to Camera. Ring XZ is aligned with view line.
-      // rotateX(90): Rotates around X axis. Y axis moves to Z? Z moves to -Y?
-      // Yes, local Z was pointing to camera. Rotate +90 on X -> local Z points down (-Y world if unrotated). Local Y points to camera.
-      // If Ring is XZ plane, its normal is Y. So now Y points to camera. Ring face is visible.
-      // Correct.
-
+     
       reticle.updateMatrix();
 
       if (points.length < 2) {
